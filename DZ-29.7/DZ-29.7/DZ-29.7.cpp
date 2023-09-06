@@ -1,20 +1,74 @@
-﻿// DZ-29.7.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
-//
+﻿#include <iostream>
+#include <future>
+#include <thread>
+#include <mutex>
 
-#include <iostream>
+struct Node
+{
+    int value;
+    Node* next;
+    std::mutex* node_mutex;
+};
+
+class FineGrainedQueue
+{
+    Node* head;
+    std::mutex* queue_mutex;
+
+public:
+    FineGrainedQueue()
+        : head(new Node)
+    {
+    }
+
+    ~FineGrainedQueue()
+    {
+    }
+    void insertIntoMiddle(int value, int pos)
+    {
+
+        // получаем указатель на первый элемент списка и блокируем его мьютекс
+        Node* current = nullptr;
+        Node* prev = nullptr;
+        {
+            std::unique_lock<std::mutex> lock(*queue_mutex);
+
+            current = head;
+            current->node_mutex->lock();
+        }
+
+        // итерируемся по списку до указанной точки вставки или конца списка
+        for (int counter = 0; current->next && counter != pos; ++counter)
+        {
+            Node* old_prev = prev;
+            prev = current;
+            current = current->next;
+            current->node_mutex->lock();
+
+            if (old_prev)
+                old_prev->node_mutex->unlock();
+        }
+
+        // выполняем вставку
+        if (current->next)
+            current->next->node_mutex->lock();
+
+        Node* node = new Node();
+        node->value = value;
+        node->next = current->next;
+        current->next = node;
+
+        if (node->next)
+            node->next->node_mutex->unlock();
+
+        current->node_mutex->unlock();
+
+        if (prev)
+            prev->node_mutex->unlock();
+    }
+};
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    return 0;
 }
-
-// Запуск программы: CTRL+F5 или меню "Отладка" > "Запуск без отладки"
-// Отладка программы: F5 или меню "Отладка" > "Запустить отладку"
-
-// Советы по началу работы 
-//   1. В окне обозревателя решений можно добавлять файлы и управлять ими.
-//   2. В окне Team Explorer можно подключиться к системе управления версиями.
-//   3. В окне "Выходные данные" можно просматривать выходные данные сборки и другие сообщения.
-//   4. В окне "Список ошибок" можно просматривать ошибки.
-//   5. Последовательно выберите пункты меню "Проект" > "Добавить новый элемент", чтобы создать файлы кода, или "Проект" > "Добавить существующий элемент", чтобы добавить в проект существующие файлы кода.
-//   6. Чтобы снова открыть этот проект позже, выберите пункты меню "Файл" > "Открыть" > "Проект" и выберите SLN-файл.
